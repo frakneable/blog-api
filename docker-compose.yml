@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # API Service
+  blog-api:
+    container_name: blog-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080" # Maps port 5000 on your PC to 8080 on the container
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Database=blogdb;Username=user;Password=password
+    depends_on:
+      - postgres-db # Ensures the database starts before the API
+
+  # PostgreSQL Database Service
+  postgres-db:
+    container_name: postgres-db
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=blogdb
+    ports:
+      - "5432:5432" # Maps the PostgreSQL port to your PC (optional, good for debugging)
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # Persists the database data
+
+volumes:
+  postgres-data:
