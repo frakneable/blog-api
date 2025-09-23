@@ -1,6 +1,8 @@
 using BlogApi.Controllers;
 using BlogApi.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
+using Microsoft.AspNetCore.OpenApi;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +13,11 @@ builder.Services.AddDbContext<BlogDbContext>(options =>
 
 // Add Swagger/OpenAPI services
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // Add this configuration block
+    options.SwaggerDoc("v1", new() { Title = "Blog API", Version = "v1" });
+});
 
 WebApplication app = builder.Build();
 

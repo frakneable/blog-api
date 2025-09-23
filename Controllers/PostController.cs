@@ -3,29 +3,32 @@ using BlogApi.Dtos;
 using BlogApi.DTOs;
 using BlogApi.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 
 namespace BlogApi.Controllers;
 
-public static class PostController
+public static class PostsEndpoints
 {
     public static void MapPostsEndpoints(this WebApplication app)
     {
-        RouteGroupBuilder postsGroup = app.MapGroup("/api/posts").WithTags("Posts");
+        var postsGroup = app.MapGroup("/api/posts").WithTags("Posts");
 
-        // GET /api/posts: List all posts
+        // GET all posts
         postsGroup.MapGet("/", async (BlogDbContext db) =>
         {
-            List<PostSummaryResponse> posts = await db.BlogPosts
+            var posts = await db.BlogPosts
                 .Select(p => new PostSummaryResponse(p.Id, p.Title, p.Comments.Count))
                 .AsNoTracking()
                 .ToListAsync();
             return Results.Ok(posts);
-        });
+        })
+        .WithSummary("Retrieves a summary list of all blog posts.")
+        .Produces<List<PostSummaryResponse>>(StatusCodes.Status200OK);
 
-        // GET /api/posts/{id}: Details of a specific post
+        // GET post by ID
         postsGroup.MapGet("/{id:guid}", async (Guid id, BlogDbContext db) =>
         {
-            BlogPost? post = await db.BlogPosts
+            var post = await db.BlogPosts
                 .Include(p => p.Comments)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -34,19 +37,25 @@ public static class PostController
                 return Results.NotFound($"Post with ID {id} not found.");
             }
 
-            PostDetailResponse response = new(
+            var response = new PostDetailResponse(
                 post.Id,
                 post.Title,
                 post.Content,
                 post.Comments.Select(c => new CommentResponse(c.Id, c.Text)).ToList()
             );
             return Results.Ok(response);
-        });
+        })
+        .WithOpenApi(operation => new OpenApiOperation(operation)
+        {
+            Summary = "Retrieves a specific blog post by its unique ID.",
+        })
+        .Produces<PostDetailResponse>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status404NotFound);
 
-        // POST /api/posts: Create a new post
+        // POST a new blog post
         postsGroup.MapPost("/", async (CreatePostRequest request, BlogDbContext db) =>
         {
-            BlogPost newPost = new()
+            var newPost = new BlogPost
             {
                 Title = request.Title,
                 Content = request.Content
@@ -55,20 +64,23 @@ public static class PostController
             await db.BlogPosts.AddAsync(newPost);
             await db.SaveChangesAsync();
 
-            PostSummaryResponse response = new(newPost.Id, newPost.Title, 0);
+            var response = new PostSummaryResponse(newPost.Id, newPost.Title, 0);
             return Results.Created($"/api/posts/{newPost.Id}", response);
-        });
+        })
+        .WithSummary("Creates a new blog post.")
+        .Produces<PostSummaryResponse>(StatusCodes.Status201Created)
+        .ProducesValidationProblem();
 
-        // POST /api/posts/{id}/comments: Add a comment to a specific post
+        // POST a new comment to a blog post
         postsGroup.MapPost("/{id:guid}/comments", async (Guid id, CreateCommentRequest request, BlogDbContext db) =>
         {
-            BlogPost? post = await db.BlogPosts.FindAsync(id);
+            var post = await db.BlogPosts.FindAsync(id);
             if (post is null)
             {
                 return Results.NotFound($"Post with ID {id} not found.");
             }
 
-            Comment newComment = new()
+            var newComment = new Comment
             {
                 Text = request.Text,
                 BlogPostId = id
@@ -77,8 +89,15 @@ public static class PostController
             await db.Comments.AddAsync(newComment);
             await db.SaveChangesAsync();
 
-            CommentResponse response = new(newComment.Id, newComment.Text);
+            var response = new CommentResponse(newComment.Id, newComment.Text);
             return Results.Created($"/api/posts/{id}/comments/{newComment.Id}", response);
-        });
+        })
+        .WithOpenApi(operation => new OpenApiOperation(operation)
+        {
+            Summary = "Adds a new comment to a specific blog post."
+        })
+        .Produces<CommentResponse>(StatusCodes.Status201Created)
+        .ProducesValidationProblem()
+        .Produces(StatusCodes.Status404NotFound);
     }
 }
